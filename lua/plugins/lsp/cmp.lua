@@ -2,19 +2,23 @@ local cmp = require 'cmp'
 local luasnip = require 'luasnip'
 local g = vim.g
 
+local has_words_before = function()
+  local line, col = unpack(vim.api.nvim_win_get_cursor(0))
+  return col ~= 0 and vim.api.nvim_buf_get_lines(0, line - 1, line, true)[1]:sub(col, col):match '%s' == nil
+end
+
 -- load snippets
 require('luasnip.loaders.from_vscode').lazy_load()
 luasnip.filetype_extend('typescript', { 'javascript' })
 luasnip.filetype_extend('typescriptreact', { 'javascriptreact' })
 
+luasnip.config.setup {
+  region_check_events = 'CursorHold',
+}
+
 -- diable github copilot mapping
 vim.g.copilot_no_tab_map = true
 vim.g.copilot_assume_mapped = true
-
-local has_words_before = function()
-  local line, col = unpack(vim.api.nvim_win_get_cursor(0))
-  return col ~= 0 and vim.api.nvim_buf_get_lines(0, line - 1, line, true)[1]:sub(col, col):match '%s' == nil
-end
 
 cmp.setup {
   sources = cmp.config.sources({
@@ -34,6 +38,21 @@ cmp.setup {
       winhighlight = 'Normal:Normal,FloatBorder:FloatBorder,IncSearch:Visual,Search:None',
     },
   },
+  enabled = function()
+    -- disable in comments
+    local context = require 'cmp.config.context'
+
+    if context.in_treesitter_capture 'comment' or context.in_syntax_group 'Comment' then
+      return false
+    end
+
+    --- disable in snippets
+    if luasnip.jumpable() then
+      return false
+    end
+
+    return true
+  end,
   completion = {
     completeopt = 'menu,menuone,noselect,noinsert',
   },
@@ -89,10 +108,10 @@ cmp.setup {
     -- confirm suggestion
     ['<CR>'] = cmp.mapping.confirm { select = true },
     ['<Tab>'] = cmp.mapping(function(fallback)
-      if luasnip.expand_or_jumpable() then
-        luasnip.expand_or_jump()
-      elseif cmp.visible() then
+      if cmp.visible() then
         cmp.confirm { select = true }
+      elseif luasnip.expand_or_jumpable() then
+        luasnip.expand_or_jump()
       elseif has_words_before() then
         cmp.complete()
       else
